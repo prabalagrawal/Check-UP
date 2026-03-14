@@ -1,0 +1,9 @@
+{
+  "name": "CheckUp - AI Preventive Healthcare",
+  "description": "An AI-powered preventive healthcare platform that detects health risks early using wearable data and predictive intelligence.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

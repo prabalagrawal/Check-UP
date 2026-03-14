@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user basic information and health preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["consumer", "doctor", "insurance"] },
+        "medicalHistory": { "type": "string" },
+        "lifestyle": {
+          "type": "object",
+          "properties": {
+            "foodHabits": { "type": "string" },
+            "exerciseFrequency": { "type": "string" },
+            "smoking": { "type": "boolean" },
+            "alcohol": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "healthRecords": {
+      "title": "Health Record",
+      "description": "Medical history, lab reports, and prescriptions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["lab_report", "prescription", "diagnosis", "visit"] },
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "content": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["userId", "type", "title", "date"]
+    },
+    "wearableData": {
+      "title": "Wearable Data",
+      "description": "Daily health metrics from wearables.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "steps": { "type": "integer" },
+        "heartRate": { "type": "integer" },
+        "sleepHours": { "type": "number" },
+        "stressLevel": { "type": "integer" }
+      },
+      "required": ["userId", "date"]
+    },
+    "riskPredictions": {
+      "title": "Risk Prediction",
+      "description": "AI-generated health risk assessments.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "predictionDate": { "type": "string", "format": "date-time" },
+        "category": { "type": "string" },
+        "riskScore": { "type": "number" },
+        "insights": { "type": "string" },
+        "recommendations": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "predictionDate", "category", "riskScore"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile document"
+    },
+    "/healthRecords/{recordId}": {
+      "schema": "healthRecords",
+      "description": "Individual health records"
+    },
+    "/wearableData/{dataId}": {
+      "schema": "wearableData",
+      "description": "Daily wearable metrics"
+    },
+    "/riskPredictions/{predictionId}": {
+      "schema": "riskPredictions",
+      "description": "AI risk predictions"
+    }
+  }
+}
