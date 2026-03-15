@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Sparkles, ArrowUpRight } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, ArrowUpRight, Heart } from 'lucide-react';
 import { chatWithOllie } from '../services/aiService';
+import Logo from './Logo';
 
 export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
@@ -52,10 +53,10 @@ export default function ChatBot() {
       <motion.button
         whileHover={{ scale: 1.1, rotate: 5 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-white text-white rounded-full shadow-[0_20px_50px_rgba(30,58,138,0.3)] flex items-center justify-center z-[100] border-4 border-white overflow-hidden"
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-6 right-6 w-16 h-16 bg-owl-blue text-white rounded-full shadow-[0_20px_50px_rgba(30,58,138,0.3)] flex items-center justify-center z-[100] border-4 border-white overflow-hidden"
       >
-        <img src="/ollie-logo.png" alt="Ollie" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <Heart className="w-8 h-8 text-white" />
         <motion.div 
           animate={{ scale: [1, 1.2, 1] }}
           transition={{ repeat: Infinity, duration: 2 }}
@@ -75,9 +76,7 @@ export default function ChatBot() {
             {/* Header */}
             <div className="bg-gradient-to-r from-owl-blue to-[#3B82F6] p-8 text-white flex justify-between items-center">
               <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-inner backdrop-blur-md overflow-hidden">
-                  <img src="/ollie-logo.png" alt="Ollie" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
-                </div>
+                <Logo size="md" variant="dark" />
                 <div>
                   <h3 className="font-black text-lg tracking-tight">Ollie the Owl</h3>
                   <div className="flex items-center space-x-2">

@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { User, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { Heart, User as UserIcon, LogOut, Menu, X } from 'lucide-react';
+import Logo from './Logo';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,7 +21,7 @@ export default function Navbar({ user }: { user: User | null }) {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2">
-              <img src="/ollie-logo.png" alt="Ollie Logo" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />
+              <Logo size="sm" />
               <span className="text-xl font-bold text-owl-blue">CheckUp</span>
             </Link>
           </div>

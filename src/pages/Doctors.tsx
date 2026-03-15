@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion';
-import { Stethoscope, Database, Activity, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Stethoscope, Database, Activity, ShieldCheck, ArrowRight, Heart } from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function Doctors() {
   return (
     <div className="bg-white min-h-screen">
       <section className="py-20 bg-owl-blue text-white relative overflow-hidden feather-pattern">
         <div className="absolute top-0 right-0 p-12 opacity-10 animate-feather">
-          <img src="/ollie-logo.png" alt="Ollie" className="w-64 h-64 brightness-0 invert" referrerPolicy="no-referrer" />
+          <Logo size="xl" variant="dark" className="scale-150" />
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h1 className="text-5xl font-bold mb-6">The Doctor's Nest: Wisdom for Providers</h1>
@@ -78,7 +79,7 @@ export default function Doctors() {
               </button>
             </div>
             <div className="lg:w-1/2 bg-white/50 backdrop-blur-sm border border-owl-brown/10 rounded-[2.5rem] h-80 w-full flex flex-col items-center justify-center p-8 text-center">
-              <img src="/ollie-logo.png" alt="Ollie" className="w-24 h-24 mb-4 opacity-20" referrerPolicy="no-referrer" />
+              <Logo size="lg" className="mx-auto mb-4 opacity-20" />
               <span className="text-owl-brown font-medium">Provider Nest Preview</span>
               <p className="text-sm text-gray-400 mt-2">Coming soon to your clinic</p>
             </div>

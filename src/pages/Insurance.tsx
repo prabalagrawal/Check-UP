@@ -1,4 +1,5 @@
 import { Shield, BarChart3, FileCheck, Zap, ArrowRight } from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function Insurance() {
   return (
@@ -57,7 +58,7 @@ export default function Insurance() {
             </div>
             <div className="bg-owl-blue rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl feather-pattern">
               <div className="absolute top-0 right-0 p-8 opacity-10 animate-feather">
-                <img src="/ollie-logo.png" alt="Ollie" className="w-48 h-48 brightness-0 invert" referrerPolicy="no-referrer" />
+                <Logo size="xl" variant="dark" />
               </div>
               <div className="relative z-10">
                 <Zap className="w-12 h-12 text-owl-tan mb-6" />

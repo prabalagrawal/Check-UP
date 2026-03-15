@@ -61,7 +61,7 @@ export default function Wearables() {
         const data = querySnapshot.docs.map(doc => doc.data() as WearableData);
         setRecentData(data);
       } catch (error) {
-        console.error("Error fetching wearable data:", error);
+        handleFirestoreError(error, OperationType.GET, 'wearableData');
       } finally {
         setLoading(false);
       }
@@ -154,23 +154,6 @@ export default function Wearables() {
 
   return (
     <div className="min-h-screen bg-cloud-grey pb-20">
-      {/* Top Navigation Summary */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-owl-blue rounded-xl flex items-center justify-center">
-              <Watch className="text-white w-6 h-6" />
-            </div>
-            <span className="text-xl font-black text-owl-blue">Vitality Sync</span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <Link to="/dashboard" className="text-sm font-bold text-gray-500 hover:text-owl-blue transition-colors">
-              Back to Nest
-            </Link>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-12 text-center md:text-left">
           <h1 className="text-4xl font-black text-owl-blue mb-4">Sync Your Vitality</h1>

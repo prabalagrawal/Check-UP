@@ -5,6 +5,8 @@ import { db, auth } from '../firebase';
 import { motion } from 'framer-motion';
 import { Heart, Activity, Utensils, Cigarette, Wine, Save, ArrowRight } from 'lucide-react';
 
+import Logo from '../components/Logo';
+
 export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [medicalHistory, setMedicalHistory] = useState('');
@@ -51,9 +53,7 @@ export default function Onboarding() {
         </div>
 
         <div className="flex justify-center mb-8">
-          <div className="w-20 h-20 bg-owl-tan rounded-3xl flex items-center justify-center shadow-inner overflow-hidden border-4 border-white">
-            <img src="/ollie-logo.png" alt="Ollie" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
-          </div>
+          <Logo size="lg" />
         </div>
 
         <div className="text-center mb-12">

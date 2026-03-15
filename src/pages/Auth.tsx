@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { auth, db } from '../firebase';
+import Logo from '../components/Logo';
 import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -66,13 +67,11 @@ export default function Auth() {
         className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 border border-owl-brown/10 relative overflow-hidden nest-pattern"
       >
         <div className="absolute -top-12 -right-12 opacity-5 animate-feather">
-          <img src="/ollie-logo.png" alt="Ollie" className="w-40 h-40" referrerPolicy="no-referrer" />
+          <Heart className="w-40 h-40 text-owl-blue" />
         </div>
 
         <div className="text-center mb-8 relative z-10">
-          <div className="w-16 h-16 bg-owl-blue rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-owl-blue/20">
-            <img src="/ollie-logo.png" alt="Ollie" className="w-10 h-10 brightness-0 invert" referrerPolicy="no-referrer" />
-          </div>
+          <Logo size="lg" className="mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-owl-blue">
             {isLogin ? 'Welcome to the Nest' : 'Build Your Nest'}
           </h2>

@@ -56,17 +56,18 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'role']) &&
-             data.uid == request.auth.uid &&
-             data.role in ['consumer', 'doctor', 'insurance'] &&
+             data.role in ['consumer', 'doctor', 'insurance', 'admin'] &&
              (!('medicalHistory' in data) || data.medicalHistory is string) &&
-             (!('lifestyle' in data) || data.lifestyle is map);
+             (!('lifestyle' in data) || data.lifestyle is map) &&
+             (!('linkedDevices' in data) || data.linkedDevices is list);
     }
 
     // Rules
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.uid == request.auth.uid;
+      allow update: if (isOwner(userId) || isAdmin()) && 
+                    (isAdmin() || (isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.uid == resource.data.uid));
     }
 
     match /healthRecords/{recordId} {
@@ -84,7 +85,21 @@ service cloud.firestore {
 
     match /riskPredictions/{predictionId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if isAdmin(); // Only AI/Admin should write predictions
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /journalEntries/{entryId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /vitals/{vitalId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
   }
 }

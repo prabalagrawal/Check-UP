@@ -13,6 +13,7 @@ import Navbar from './components/Navbar';
 import ChatBot from './components/ChatBot';
 import Onboarding from './pages/Onboarding';
 import Wearables from './pages/Wearables';
+import Logo from './components/Logo';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -32,9 +33,9 @@ export default function App() {
         <motion.div
           animate={{ y: [0, -15, 0], rotate: [0, 5, -5, 0] }}
           transition={{ repeat: Infinity, duration: 2 }}
-          className="w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 border-4 border-white overflow-hidden"
+          className="mb-6"
         >
-          <img src="/ollie-logo.png" alt="Ollie" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+          <Logo size="xl" />
         </motion.div>
         <div className="flex flex-col items-center">
           <div className="text-owl-blue font-bold text-xl tracking-tight mb-2">Ollie is waking up...</div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, addDoc } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, addDoc, getDocs, getDocFromServer } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -26,7 +26,8 @@ import {
   Utensils,
   RefreshCw,
   Zap,
-  Clock
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   AreaChart,
@@ -37,6 +38,7 @@ import {
   Tooltip
 } from 'recharts';
 import { predictHealthRisks, searchInsuranceSchemes, scanPrescription, getOllieWisdom, HealthPrediction } from '../services/aiService';
+import { analyzeDailyJournal, analyzeHealthData, HealthAnalysis, JournalInsight } from '../services/aiHealthService';
 import OllieMascot from '../components/OllieMascot';
 
 const mockChartData = [
@@ -59,47 +61,165 @@ export default function Dashboard() {
   const [isSearchingInsurance, setIsSearchingInsurance] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [wiseWords, setWiseWords] = useState<string>('');
+  const [healthRecords, setHealthRecords] = useState<any[]>([]);
+  const [journalEntry, setJournalEntry] = useState('');
+  const [isAnalyzingJournal, setIsAnalyzingJournal] = useState(false);
+  const [journalInsight, setJournalInsight] = useState<JournalInsight | null>(null);
+  const [calories, setCalories] = useState(0);
+  const [water, setWater] = useState(0);
+  const [isSavingVitals, setIsSavingVitals] = useState(false);
+  const [isAnalyzingHealth, setIsAnalyzingHealth] = useState(false);
+  const [healthAnalysis, setHealthAnalysis] = useState<HealthAnalysis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    const fetchUserData = async () => {
-      const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-      if (userDoc.exists()) {
-        setUserData(userDoc.data());
-      }
-    };
-
-    fetchUserData();
-
-    // Run prediction when user data is available
-    const runPrediction = async () => {
-      if (userData) {
-        try {
-          const res = await predictHealthRisks(
-            userData.medicalHistory || 'None provided',
-            userData.lifestyle || {},
-            "Resting HR: 68-74 bpm (Stable), Sleep Quality: 82% (Good), Active Calories: 450/day (Moderate), HRV: 55ms (Normal)"
-          );
-          setPredictions(res);
-        } catch (err) {
-          console.error("AI Prediction Error:", err);
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
         }
       }
     };
+    testConnection();
 
-    if (userData) {
-      runPrediction();
-      const fetchWisdom = async () => {
-        const wisdom = await getOllieWisdom(userData);
-        setWiseWords(wisdom || '');
-      };
-      fetchWisdom();
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        // Fetch User Data
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserData(data);
+          
+          // Run AI Prediction
+          try {
+            const res = await predictHealthRisks(
+              data.medicalHistory || 'None provided',
+              data.lifestyle || {},
+              "Resting HR: 68-74 bpm (Stable), Sleep Quality: 82% (Good), Active Calories: 450/day (Moderate), HRV: 55ms (Normal)"
+            );
+            setPredictions(res);
+          } catch (err) {
+            console.error("AI Prediction Error:", err);
+          }
+
+          // Fetch Wisdom
+          try {
+            const wisdom = await getOllieWisdom(data);
+            setWiseWords(wisdom || '');
+          } catch (err) {
+            console.error("Wisdom Error:", err);
+          }
+        }
+
+        // Fetch Health Records
+        const q = query(
+          collection(db, 'healthRecords'),
+          where('userId', '==', auth.currentUser!.uid),
+          orderBy('date', 'desc'),
+          limit(10)
+        );
+        const snap = await getDocs(q);
+        setHealthRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'initial_dashboard_data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, []);
+
+  const handleJournalSubmit = async () => {
+    if (!journalEntry.trim()) return;
+    setIsAnalyzingJournal(true);
+    try {
+      const insight = await analyzeDailyJournal(journalEntry);
+      setJournalInsight(insight);
+      
+      // Save to Firestore
+      try {
+        await addDoc(collection(db, 'journalEntries'), {
+          userId: auth.currentUser?.uid,
+          entry: journalEntry,
+          date: new Date().toISOString(),
+          insight
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'journalEntries');
+      }
+      
+      setJournalEntry('');
+    } catch (err) {
+      console.error("Journal analysis error:", err);
+    } finally {
+      setIsAnalyzingJournal(false);
     }
-    
-    setLoading(false);
-  }, [userData?.uid]);
+  };
+
+  const handleSaveVitals = async () => {
+    setIsSavingVitals(true);
+    try {
+      await addDoc(collection(db, 'vitals'), {
+        userId: auth.currentUser?.uid,
+        calories,
+        water,
+        date: new Date().toISOString()
+      });
+      alert("Vitals saved to your nest!");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'vitals');
+    } finally {
+      setIsSavingVitals(false);
+    }
+  };
+
+  const handleDeepAnalysis = async () => {
+    setIsAnalyzingHealth(true);
+    try {
+      // Combine all relevant data for analysis
+      const analysisData = {
+        medicalHistory: userData?.medicalHistory,
+        lifestyle: userData?.lifestyle,
+        records: healthRecords.map(r => ({ title: r.title, type: r.type, content: r.content })),
+        vitals: { calories, water },
+        wearableTrends: {
+          avgHeartRate: 72,
+          avgSleep: 7.4,
+          avgHRV: 58,
+          weeklyHistory: mockChartData
+        }
+      };
+      
+      const analysis = await analyzeHealthData(analysisData);
+      setHealthAnalysis(analysis);
+      
+      // Save prediction to Firestore
+      try {
+        await addDoc(collection(db, 'riskPredictions'), {
+          userId: auth.currentUser?.uid,
+          predictionDate: new Date().toISOString(),
+          category: 'Deep Analysis',
+          riskScore: healthScore,
+          insights: JSON.stringify(analysis),
+          recommendations: analysis.preventiveActions
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'riskPredictions');
+      }
+      
+    } catch (err) {
+      console.error("Deep analysis error:", err);
+    } finally {
+      setIsAnalyzingHealth(false);
+    }
+  };
 
   const handleScanPrescription = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,10 +240,20 @@ export default function Dashboard() {
           content: JSON.stringify(result),
           verified: true
         });
+        
+        // Refresh records
+        const q = query(
+          collection(db, 'healthRecords'),
+          where('userId', '==', auth.currentUser!.uid),
+          orderBy('date', 'desc'),
+          limit(10)
+        );
+        const snap = await getDocs(q);
+        setHealthRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
         alert("Prescription scanned and added to portfolio!");
       } catch (err) {
-        console.error("Scanning error:", err);
-        alert("Failed to scan prescription.");
+        handleFirestoreError(err, OperationType.WRITE, 'healthRecords');
       } finally {
         setIsScanning(false);
       }
@@ -146,34 +276,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-cloud-grey pb-20">
-      {/* Top Navigation Summary */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-owl-blue rounded-xl flex items-center justify-center">
-              <Heart className="text-white w-6 h-6" />
-            </div>
-            <span className="text-xl font-black text-owl-blue hidden md:block">CheckUp</span>
-          </div>
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-wellness-green rounded-full animate-pulse" />
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Ollie is Watching</span>
-            </div>
-            <div className="h-8 w-px bg-gray-100" />
-            <div className="flex items-center space-x-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-bold text-gray-400 uppercase">Health Score</p>
-                <p className="text-sm font-black text-owl-blue">{healthScore}/100</p>
-              </div>
-              <div className="w-10 h-10 bg-cloud-grey rounded-full border border-gray-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-gray-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Ollie's Wisdom Banner */}
         <AnimatePresence>
@@ -337,6 +439,78 @@ export default function Dashboard() {
                         </div>
                       </div>
                     </div>
+                    
+                    <button 
+                      onClick={handleDeepAnalysis}
+                      disabled={isAnalyzingHealth}
+                      className="w-full py-4 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center space-x-2"
+                    >
+                      {isAnalyzingHealth ? <RefreshCw className="animate-spin w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+                      <span>{isAnalyzingHealth ? 'Analyzing Deep Trends...' : 'Run Deep Health Analysis'}</span>
+                    </button>
+
+                    <AnimatePresence>
+                      {healthAnalysis && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-8 space-y-8 border-t border-white/10 pt-8"
+                        >
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">Lifestyle Risks</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {healthAnalysis.potentialRisks.map((risk, i) => (
+                                <div key={i} className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="font-bold">{risk.condition}</span>
+                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${risk.probability === 'High' ? 'bg-red-500' : 'bg-orange-500'}`}>
+                                      {risk.probability}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-white/60">{risk.reasoning}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">Preventive Actions</h4>
+                              <ul className="space-y-2">
+                                {healthAnalysis.preventiveActions.map((action, i) => (
+                                  <li key={i} className="text-sm flex items-start space-x-2">
+                                    <CheckCircle2 size={14} className="text-wellness-green mt-1 shrink-0" />
+                                    <span>{action}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">Dietary Wisdom</h4>
+                              <ul className="space-y-2">
+                                {healthAnalysis.dietaryRecommendations.map((diet, i) => (
+                                  <li key={i} className="text-sm flex items-start space-x-2">
+                                    <Utensils size={14} className="text-wellness-green mt-1 shrink-0" />
+                                    <span>{diet}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">Lifestyle Adjustments</h4>
+                            <div className="flex flex-wrap gap-3">
+                              {healthAnalysis.lifestyleAdjustments.map((adj, i) => (
+                                <div key={i} className="px-4 py-2 bg-white/10 rounded-xl border border-white/10 text-xs font-bold">
+                                  {adj}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 ) : (
                   <div className="h-32 flex items-center justify-center italic text-white/50">
@@ -376,11 +550,212 @@ export default function Dashboard() {
                 </motion.div>
               ))}
             </div>
+
+            {/* Health Portfolio */}
+            <div className="bg-white rounded-[3rem] p-10 shadow-xl border border-gray-100">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-black text-owl-blue flex items-center">
+                  <FileText className="w-6 h-6 mr-3 text-insight-purple" />
+                  Health Portfolio
+                </h2>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-insight-purple/10 text-insight-purple text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-insight-purple hover:text-white transition-all"
+                >
+                  Add Record
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {healthRecords.length > 0 ? (
+                  healthRecords.map((record, i) => (
+                    <div key={record.id} className="flex items-center justify-between p-6 bg-cloud-grey/30 rounded-[2rem] border border-gray-50 hover:bg-white hover:shadow-md transition-all group">
+                      <div className="flex items-center space-x-6">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                          <FileText className="w-6 h-6 text-insight-purple" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-black text-owl-blue">{record.title}</p>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
+                            {record.type} • {new Date(record.date).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {record.verified && (
+                          <div className="px-3 py-1 bg-wellness-green/10 text-wellness-green text-[10px] font-black uppercase rounded-full">
+                            AI Verified
+                          </div>
+                        )}
+                        <button className="p-2 text-gray-400 hover:text-owl-blue">
+                          <ArrowUpRight size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 bg-cloud-grey/20 rounded-[2rem] border-2 border-dashed border-gray-100">
+                    <p className="text-gray-400 font-bold italic">Your health portfolio is empty.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Daily Wisdom Journal */}
+            <div className="bg-white rounded-[3rem] p-10 shadow-xl border border-gray-100">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-black text-owl-blue flex items-center">
+                  <Brain className="w-6 h-6 mr-3 text-insight-purple" />
+                  Daily Wisdom Journal
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="text-insight-purple w-4 h-4 animate-pulse" />
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">AI Review Active</span>
+                </div>
+              </div>
+              
+              <div className="space-y-6">
+                <div className="relative">
+                  <textarea 
+                    value={journalEntry}
+                    onChange={(e) => setJournalEntry(e.target.value)}
+                    placeholder="How are you feeling today? What did you eat? Any symptoms or activities you want Ollie to review?"
+                    className="w-full h-40 p-6 bg-cloud-grey border border-gray-100 rounded-[2rem] focus:ring-2 focus:ring-owl-blue outline-none font-medium resize-none"
+                  />
+                  <button 
+                    onClick={handleJournalSubmit}
+                    disabled={isAnalyzingJournal || !journalEntry.trim()}
+                    className="absolute bottom-4 right-4 px-6 py-3 bg-owl-blue text-white rounded-2xl font-bold hover:bg-owl-blue/90 transition-all shadow-lg flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {isAnalyzingJournal ? <RefreshCw className="animate-spin w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                    <span>{isAnalyzingJournal ? 'Analyzing...' : 'Ask Ollie'}</span>
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {journalInsight && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-8 bg-insight-purple/5 border border-insight-purple/10 rounded-[2.5rem] space-y-6"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <OllieMascot size={60} />
+                        <div>
+                          <p className="text-xs font-black text-insight-purple uppercase tracking-widest">Ollie's Review</p>
+                          <p className="text-lg font-bold text-owl-blue">Biological Patterns Detected</p>
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-600 leading-relaxed italic">"{journalInsight.analysis}"</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Potential Issues</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {journalInsight.potentialIssues.map((issue, i) => (
+                              <span key={i} className="px-3 py-1 bg-red-50 text-red-500 text-[10px] font-black uppercase rounded-full border border-red-100">
+                                {issue}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Matching Symptoms</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {journalInsight.matchingSymptoms.map((symptom, i) => (
+                              <span key={i} className="px-3 py-1 bg-blue-50 text-blue-500 text-[10px] font-black uppercase rounded-full border border-blue-100">
+                                {symptom}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-6 bg-white rounded-3xl border border-insight-purple/10">
+                        <h4 className="text-sm font-black text-owl-blue mb-2">Regulation Advice</h4>
+                        <p className="text-sm text-gray-500 leading-relaxed">{journalInsight.regulationAdvice}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Right Column: Tools & Actions */}
           <div className="lg:col-span-4 space-y-8">
+            {/* Vitality Tracker (Calories & Water) */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-100">
+              <h3 className="text-xl font-black text-owl-blue mb-6 flex items-center">
+                <Utensils className="w-6 h-6 mr-3 text-wellness-green" />
+                Vitality Tracker
+              </h3>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-6 bg-cloud-grey rounded-3xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Calories</p>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={calories}
+                        onChange={(e) => setCalories(Number(e.target.value))}
+                        className="w-20 bg-transparent text-2xl font-black text-owl-blue outline-none"
+                      />
+                      <span className="text-xs font-bold text-gray-400">kcal</span>
+                    </div>
+                  </div>
+                  <div className="p-6 bg-cloud-grey rounded-3xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Water</p>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={water}
+                        onChange={(e) => setWater(Number(e.target.value))}
+                        className="w-20 bg-transparent text-2xl font-black text-owl-blue outline-none"
+                      />
+                      <span className="text-xs font-bold text-gray-400">glasses</span>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleSaveVitals}
+                  disabled={isSavingVitals}
+                  className="w-full py-4 bg-wellness-green text-white rounded-2xl font-bold hover:bg-wellness-green/90 transition-all shadow-lg shadow-wellness-green/20 flex items-center justify-center space-x-2"
+                >
+                  {isSavingVitals ? <RefreshCw className="animate-spin w-5 h-5" /> : <Plus size={20} />}
+                  <span>{isSavingVitals ? 'Saving...' : 'Log Vitals'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Scan Prescription Quick Action */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-100 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-insight-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <h3 className="text-xl font-black text-owl-blue mb-4 flex items-center">
+                <Camera className="w-6 h-6 mr-3 text-insight-purple" />
+                Scan Prescription
+              </h3>
+              <p className="text-sm text-gray-500 mb-6 font-medium">
+                Upload your medical prescriptions. Ollie will extract the data and add it to your digital twin.
+              </p>
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isScanning}
+                className="w-full py-4 bg-insight-purple text-white rounded-2xl font-bold hover:bg-insight-purple/90 transition-all shadow-lg shadow-insight-purple/20 flex items-center justify-center space-x-2"
+              >
+                {isScanning ? (
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    <span>{isScanning ? 'Scanning...' : 'Upload & Scan'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
             {/* Digital Twin Simulation */}
             <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-100 relative overflow-hidden">
               <div className="absolute inset-0 scan-line opacity-20" />
